@@ -35,6 +35,7 @@ from llm_service import (  # noqa: E402
     generate_prompt,
     repair_prompt,
 )
+from jobs import JobQueue  # noqa: E402
 from suno_knowledge import (  # noqa: E402
     COMMON_SUBGENRES,
     ESPECIALLY_HARD_BANNED,
@@ -64,6 +65,7 @@ db = client[os.environ["DB_NAME"]]
 
 app = FastAPI(title="Suno Song Prompt Generator API")
 api = APIRouter(prefix="/api")
+jobs = JobQueue(db)
 
 
 # ---------- Schemas ----------
@@ -130,6 +132,34 @@ async def _generate_with_repair(concept: str, auto_repair: bool) -> Dict[str, An
     return {"payload": data, "validation": report, "repairs": repairs}
 
 
+async def _assemble_with_repair(form: Dict[str, Any], auto_repair: bool) -> Dict[str, Any]:
+    data = await generate_from_form(form)
+    report = validate_output(data)
+    repairs = 0
+    if auto_repair and report["errors"]:
+        try:
+            data = await repair_prompt(
+                f"Structured form: {form}",
+                data,
+                [e["message"] for e in report["errors"]],
+            )
+            report = validate_output(data)
+            repairs = 1
+        except Exception as e:
+            logger.warning("assemble repair failed: %s", e)
+    return {"payload": data, "validation": report, "repairs": repairs}
+
+
+# Job workers wrap the above for use with JobQueue.
+
+async def _generate_worker(req: Dict[str, Any]) -> Dict[str, Any]:
+    return await _generate_with_repair(req["concept"], req.get("auto_repair", True))
+
+
+async def _assemble_worker(req: Dict[str, Any]) -> Dict[str, Any]:
+    return await _assemble_with_repair(req["form"], req.get("auto_repair", True))
+
+
 # ---------- Routes ----------
 
 @api.get("/")
@@ -162,6 +192,18 @@ async def knowledge():
 
 @api.post("/generate")
 async def post_generate(req: GenerateRequest):
+    """Async: enqueue and return job_id immediately. Poll /api/jobs/{id}."""
+    job_id = await jobs.enqueue("generate", {
+        "concept": req.concept,
+        "auto_repair": req.auto_repair,
+    })
+    jobs.schedule(job_id, _generate_worker)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@api.post("/generate/sync")
+async def post_generate_sync(req: GenerateRequest):
+    """Synchronous variant for tests / short-prompt fallback."""
     try:
         return await _generate_with_repair(req.concept, req.auto_repair)
     except Exception as e:
@@ -171,25 +213,30 @@ async def post_generate(req: GenerateRequest):
 
 @api.post("/assemble")
 async def post_assemble(req: AssembleRequest):
+    """Async: enqueue and return job_id immediately. Poll /api/jobs/{id}."""
+    job_id = await jobs.enqueue("assemble", {
+        "form": req.form,
+        "auto_repair": req.auto_repair,
+    })
+    jobs.schedule(job_id, _assemble_worker)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@api.post("/assemble/sync")
+async def post_assemble_sync(req: AssembleRequest):
     try:
-        data = await generate_from_form(req.form)
-        report = validate_output(data)
-        repairs = 0
-        if req.auto_repair and report["errors"]:
-            try:
-                data = await repair_prompt(
-                    f"Structured form: {req.form}",
-                    data,
-                    [e["message"] for e in report["errors"]],
-                )
-                report = validate_output(data)
-                repairs = 1
-            except Exception as e:
-                logger.warning("assemble repair failed: %s", e)
-        return {"payload": data, "validation": report, "repairs": repairs}
+        return await _assemble_with_repair(req.form, req.auto_repair)
     except Exception as e:
         logger.exception("assemble failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@api.get("/jobs/{job_id}")
+async def get_job(job_id: str):
+    doc = await jobs.get(job_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return doc
 
 
 @api.post("/fill-form")

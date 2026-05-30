@@ -18,16 +18,22 @@ const GeneratorPage = () => {
   const [concept, setConcept] = useState("");
   const [form, setForm] = useState(defaultForm());
   const [busy, setBusy] = useState(null); // 'generate' | 'fill' | 'assemble' | 'save'
+  const [progress, setProgress] = useState(null); // {label, attempt, status}
   const [result, setResult] = useState(null); // {payload, validation, repairs}
   const { data: knowledge } = useKnowledge();
 
   const bannedWords = useMemo(() => knowledge?.banned_words || [], [knowledge]);
 
+  const onJobProgress = (label) => (job, attempt) => {
+    setProgress({ label, attempt, status: job.status });
+  };
+
   const handleGenerate = async () => {
     if (!concept.trim()) return;
     setBusy("generate");
+    setProgress({ label: "queued", attempt: 0, status: "queued" });
     try {
-      const r = await sunoApi.generate(concept, true);
+      const r = await sunoApi.generate(concept, true, { onProgress: onJobProgress("generating") });
       setResult(r);
       toast.success("Prompt generated");
     } catch (e) {
@@ -35,6 +41,7 @@ const GeneratorPage = () => {
       toast.error(msg);
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   };
 
@@ -57,8 +64,9 @@ const GeneratorPage = () => {
 
   const handleAssemble = async () => {
     setBusy("assemble");
+    setProgress({ label: "queued", attempt: 0, status: "queued" });
     try {
-      const r = await sunoApi.assemble(form, true);
+      const r = await sunoApi.assemble(form, true, { onProgress: onJobProgress("assembling") });
       setResult(r);
       toast.success("Prompt assembled from form");
     } catch (e) {
@@ -66,6 +74,7 @@ const GeneratorPage = () => {
       toast.error(msg);
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   };
 
@@ -173,7 +182,9 @@ const GeneratorPage = () => {
         </div>
 
         <div className="min-w-0">
-          {!result ? (
+          {busy && (busy === "generate" || busy === "assemble") ? (
+            <GenerationProgress progress={progress} mode={busy} />
+          ) : !result ? (
             <EmptyOutput mode={mode} />
           ) : (
             <OutputsPanel payload={result.payload} bannedWords={bannedWords} />
@@ -210,5 +221,38 @@ const EmptyOutput = ({ mode }) => (
     </CardContent>
   </Card>
 );
+
+const GenerationProgress = ({ progress, mode }) => {
+  const label = mode === "assemble" ? "Assembling from form" : "Generating prompt";
+  const status = progress?.status || "queued";
+  return (
+    <Card className="border bg-card" data-testid="generation-progress-panel">
+      <CardHeader>
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin text-primary" />
+          {label}…
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm text-muted-foreground">
+        <p>
+          Claude Sonnet 4.5 is composing your full Suno prompt set. This usually takes
+          <span className="text-foreground"> 25–80 seconds </span>
+          (longer if auto-repair runs once).
+        </p>
+        <ul className="space-y-1 text-xs font-mono">
+          <li>• Drafting Style Prompt &amp; Exclude Styles</li>
+          <li>• Writing lyrics with meta-tags</li>
+          <li>• Mapping bars, rhymes, and syllables</li>
+          <li>• Validating against banned-word list</li>
+        </ul>
+        <div className="flex items-center justify-between text-xs">
+          <span>Status: <span className="font-mono text-foreground">{status}</span></span>
+          <span>Poll #{progress?.attempt ?? 0}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 
 export default GeneratorPage;
