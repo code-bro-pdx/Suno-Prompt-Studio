@@ -16,11 +16,15 @@
     "status": "completed"
   },
   {
+    "content": "Implement async job pattern for /api/generate and /api/assemble to bypass k8s 60s timeout",
+    "status": "completed"
+  },
+  {
     "content": "Run end-to-end testing with testing_agent_v3 (all user stories)",
-    "status": "in_progress"
+    "status": "completed"
   },
   {
     "content": "Fix any bugs found and re-test",
-    "status": "pending"
+    "status": "completed"
   }
 ]

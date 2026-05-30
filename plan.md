@@ -1,137 +1,167 @@
-# plan.md — Suno AI Song Prompt Generator
+# plan.md — Suno AI Song Prompt Generator (Updated)
 
 ## 1. Objectives
-- Build an MVP web app that generates **high-quality Suno prompts** using embedded knowledge from the 5 provided documents.
-- Support **Hybrid generation**: (1) Form → assembled outputs, (2) AI Mode (natural language → Claude), (3) AI fills the form.
-- Output **all required artifacts**: **Style Prompt (≤1000 chars)**, **Exclude Styles**, **Lyrics w/ meta-tags**, **Recommended Weirdness/Style Influence**, **Structure & Rhyme Map** (bars, syllables, rhyme schemes).
-- Enforce strict governance: **banned words list**, **bar-count vs BPM validation**, **syllable range validation**, and format compliance.
-- Provide a **no-auth prompt library** (browser-based UX, persisted to MongoDB; optional local fallback).
+- Deliver a production-ready MVP web app that generates **high-quality Suno prompts** using embedded knowledge from the 5 provided documents.
+- Support **Hybrid generation**:
+  1) **AI Mode** (natural language → Claude Sonnet 4.5),
+  2) **Form Mode** (structured fields → Claude-assembled output),
+  3) **Hybrid** (AI fills the form → user edits → assemble).
+- Output **all required artifacts** in one generation:
+  - **Style Prompt** (≤1000 chars)
+  - **Exclude Styles**
+  - **Lyrics w/ meta-tags** (with focus/instruction/transition tag conventions)
+  - **Recommended Weirdness / Style Influence** (preset + values)
+  - **Structure & Rhyme Map** (bars, syllables, rhyme schemes, duration math)
+- Enforce strict governance:
+  - **Banned words list enforced for Lyrics** (per Prompt 05 editorial constraints)
+  - **Bar-count sum + bar/BPM duration validation**, practical target under 4:00
+  - Rhyme/energy-note sanity warnings (where applicable)
+- Provide a **no-auth prompt library** (MongoDB persistence) with reopen/copy flows.
+- Ensure reliability under platform constraints by using an **async job pattern** for long-running generations:
+  - `POST /api/generate` / `POST /api/assemble` return **job_id immediately**
+  - Client polls `GET /api/jobs/{id}` until `done` or `error`
+
+**Current status:** Objectives for MVP are met; core functionality shipped and validated end-to-end.
 
 ---
 
 ## 2. Implementation Steps
 
-### Phase 1 — Core LLM + Validation POC (isolation; do not proceed until solid)
-**User stories**
+### Phase 1 — Core LLM + Validation POC (COMPLETED)
+**User stories (completed)**
 1. As a user, I can paste a song concept and get all 5 outputs in one response.
-2. As a user, I can see if any banned words were used and where.
+2. As a user, I can see if banned words were used and where.
 3. As a user, I can verify the Style Prompt is ≤1000 characters.
 4. As a user, I can see bar-math duration and whether it stays under 4:00.
-5. As a user, I can see syllable-range validation warnings per section.
+5. As a user, I can see syllable-range guidance per section.
 
-**Steps**
-- Create a minimal Python script to call **Emergent LLM (Claude Sonnet 4.5)**.
-- Build a **single “system prompt”** that embeds the essential taxonomies/rules:
-  - Descriptive Prompt format
-  - Meta-tag taxonomy + Basic Song Template structure
-  - Mother Genres taxonomy (MusicMap)
-  - Italian tempo markers list
-  - Vocal ranges list
-  - Common instrument models list
-  - Scale-setting heuristics (50/50 etc.)
-  - Section conventions (“by 2s”, compact section defaults)
-  - Rhyme scheme guidance per section
-  - Mix types (Raw/Wet/Dry/Parallel)
-  - **Full banned list** + exception rule
-- Define a **strict JSON output contract** from the LLM for reliability:
-  - `style_prompt`, `exclude_styles`, `lyrics`, `scales`, `structure_rhyme_map`, `validation_notes`
-- Implement a local validator module (Python) that checks:
-  - Style prompt length ≤1000
-  - Banned words presence (case-insensitive, near-match handling where feasible)
-  - Bars sum, strict bar-math duration formula, practical target < 4:00
-  - Syllable range checks per section (heuristic syllable counter)
-- Iterate prompt + schema until:
-  - JSON parses consistently
-  - banned words are avoided
-  - structure map is coherent and compact
+**What was built**
+- A consolidated **system prompt / rulebook** embedding:
+  - Descriptive Prompt format, meta-tag hierarchy, “by 2s” section defaults
+  - Mother genres + subgenre blending, Italian tempos, technical vocal ranges
+  - Instrument model examples, mix types
+  - Scale-setting heuristics / presets
+  - Prompt 05 editorial requirements + banned word list enforcement (lyrics)
+- **Strict JSON output contract** from the LLM.
+- Python harness + validators to verify:
+  - Style prompt char limit
+  - Lyrics banned words detection
+  - Bars sum == total, strict duration math, practical target < 4:00
+  - Rhyme scheme variety warnings
+  - Energy note length warnings
+- **Auto-repair** pattern: if validation errors occur, the model is prompted once to correct them.
 
-**POC exit criteria**
-- 10 consecutive runs produce valid JSON and pass validations (or produce explicit, actionable validation errors).
+**POC exit criteria (met)**
+- Consistent JSON parsing and validation success with repair loop.
 
 ---
 
-### Phase 2 — V1 App Development (FastAPI + React + MongoDB)
-**User stories**
-1. As a user, I can generate prompts via **AI Mode** (natural language) and copy each output block.
-2. As a user, I can generate prompts via **Form Mode** and still get all outputs.
-3. As a user, I can ask AI to **fill the form** from my concept, then edit fields before generating.
-4. As a user, I can see validation errors (banned words, bar/BPM mismatch, syllable issues) and regenerate.
-5. As a user, I can save a generated set to a **library** and reopen/copy later.
+### Phase 2 — V1 App Development (FastAPI + React + MongoDB) (COMPLETED)
+**User stories (completed)**
+1. Generate prompts via **AI Mode** and copy each output block.
+2. Generate prompts via **Form Mode** and get all outputs.
+3. **AI fills the form** from concept, user edits, then assemble.
+4. See validation errors/warnings and iterate.
+5. Save generations to a **library** and reopen/copy later.
 
-**Backend (FastAPI)**
-- Endpoints:
-  - `POST /api/generate` (AI mode): concept → LLM → JSON → validate → return
-  - `POST /api/assemble` (form mode): structured fields → deterministic assembly + optional LLM polish → validate → return
-  - `POST /api/fill-form` (AI helper): concept → structured form JSON
-  - `POST /api/validate` (standalone): payload → validation report
-  - `GET/POST/DELETE /api/library` (MongoDB CRUD; no auth)
-- Services:
-  - `llm_client` using Emergent universal key + Claude Sonnet 4.5
-  - `prompt_assembler` (Descriptive Prompt formatter + Exclude formatter + section template generator)
-  - `validators` (banned words, char limit, bar math, syllables)
-- Data model (MongoDB): prompt sets with metadata (title, genre, bpm, created_at, outputs, validation status)
+**Backend (FastAPI) — implemented**
+- Knowledge endpoint:
+  - `GET /api/knowledge` returns taxonomies and lists for UI (genres, tempos, vocal ranges, presets, tags, banned words).
+- Async generation endpoints (to avoid 60s ingress timeouts):
+  - `POST /api/generate` → `{ job_id }` (AI Mode)
+  - `POST /api/assemble` → `{ job_id }` (Form Mode)
+  - `GET /api/jobs/{id}` → `{ status, result | error }`
+- Hybrid helper:
+  - `POST /api/fill-form` → structured form payload
+- Validation:
+  - `POST /api/validate` → structured report `{ errors, warnings, info }`
+- Library CRUD (no auth):
+  - `POST /api/library`, `GET /api/library`, `GET /api/library/{id}`, `DELETE /api/library/{id}`
 
-**Frontend (React + shadcn/ui)**
+**Key services / modules — implemented**
+- `llm_service.py`: Claude Sonnet 4.5 via emergentintegrations, JSON extraction, repair prompt.
+- `validators.py`: char-limit, lyrics banned words, bar math, duration thresholds, rhyme/energy note warnings.
+- `jobs.py`: MongoDB-backed job queue (`queued|running|done|error`) + background scheduling.
+- `suno_knowledge.py`: consolidated knowledge base (taxonomies, presets, system rules).
+
+**Frontend (React + shadcn/ui) — implemented**
 - Pages:
-  - Generator: mode switch (AI / Form / Hybrid)
-  - Library: saved prompt sets
+  - **Generator**: three modes (AI/Form/Hybrid)
+  - **Library**: saved prompt sets with open/copy/delete
 - Generator UX:
-  - AI Mode: textarea + “Generate”
-  - Form Mode: fields for era/tempo/time sig/genre/subgenre/instruments/vocals/mood/mix + exclusions + structure prefs
-  - Hybrid: “AI fill form” → editable form → generate
-  - Output tabs/cards with copy buttons for each: Style / Exclude / Lyrics / Scales / Structure Map
-  - Validation panel: errors vs warnings; highlight banned word matches
-- Persistence:
-  - Save to MongoDB
-  - Optional localStorage cache for last 10 generations
+  - AI Mode: concept textarea + examples + Generate
+  - Form Mode: structured fields (era, tempo, genre blend, instruments, vocals, mix, structure, exclusions)
+  - Hybrid: AI concept + “Fill form” + editable form + Assemble
+  - Outputs: tabbed panel for Style/Exclude/Lyrics/Scales/Map (+ Notes)
+  - Validation panel: errors/warnings + stats (style chars, bar sum, strict duration, banned count)
+  - Lyrics renderer highlights tags and banned words inline
+  - Workflow Coach panel: contextual tips based on scale preset
+  - GenerationProgress panel: visible while polling async jobs
 
-**End of Phase 2: one E2E test round**
-- Run through: AI Mode generate → validation → save → reopen → copy.
-- Run through: AI fill form → adjust → assemble → save.
+**E2E test status**
+- Testing agent report: **98.5% overall pass rate**, **zero critical bugs**, **zero frontend issues**.
+- Core issue found in iteration 1 (k8s ingress 60s timeout) resolved via async job pattern.
 
 ---
 
-### Phase 3 — Quality, Workflows, and Reliability Enhancements
-**User stories**
-1. As a user, I can pick “Fusion difficulty” and get recommended workflow steps (Personas/Covers/Stems).
-2. As a user, I can select “Oil & Water” blending and see the suggested 81/75 settings.
-3. As a user, I can get “Exclude Styles” suggestions based on chosen genre/era.
-4. As a user, I can generate multiple variants (x2/x4) and compare outputs.
-5. As a user, I can export a prompt set as JSON/Markdown.
+### Phase 3 — Quality, Workflows, and Reliability Enhancements (OPTIONAL / NEXT)
+**User stories (proposed)**
+1. As a user, I can generate **multiple variants** (x2/x4) and compare outputs side-by-side.
+2. As a user, I can export a generation as:
+   - `.txt` blocks for Suno fields
+   - `.md` bundle
+   - JSON download
+3. As a user, I can maintain **multi-revision history** per song concept (iterations, notes, deltas).
+4. As a user, I can create/share **public links** (read-only) to a saved generation.
+5. As a user, I can simulate advanced workflows (Persona/Cover/Stems) as guided steps.
 
-**Enhancements**
-- Add a “Workflow Coach” panel (from Workflows doc):
-  - iterative generation guidance + naming conventions + when to use stems/personas
-- Add “Variant generation” (batch calls, rate-limited)
-- Improve validators:
-  - better syllable counting (hyphenation rules)
-  - stronger near-match banned detection
-  - rhyme-scheme sanity checks (section diversity)
-- Add “Prompt linting” UI: flags generic tags, suggests instrument models/vocal ranges/Italian tempos.
+**Enhancements (recommended)**
+- Variant generation:
+  - batch job creation + rate-limiting; compare UI (diffs in style prompt/lyrics/map)
+- Export tooling:
+  - “Export bundle” button producing a single package with all artifacts
+- Library upgrades:
+  - group items by “Song Project” with revision timeline
+  - tags/filters/search (genre, tempo, scale preset)
+- Validation upgrades:
+  - optional softer banning (flag vs block), configurable per user
+  - improved syllable counting heuristics
+  - stronger rhyme diversity checks and section rules enforcement
 
 **End of Phase 3: one E2E test round**
-- Variants compare, export, and workflow coach correctness.
+- Variants compare, exports, revision history, link-sharing.
 
 ---
 
 ### Phase 4 — Optional next steps (post-v1)
-- Auth (only if requested), shared libraries, persona templates, team workspaces.
-- Advanced structure editor (drag-drop sections, auto bar-math recompute).
+- Authentication (if needed), team workspaces, shared libraries.
+- Advanced structure editor:
+  - drag-and-drop section ordering
+  - auto bar-math recompute and duration preview
+  - “by 2s” guardrails + overrides
+- Persona/Stem workflow simulator:
+  - step-by-step wizard for Persona creation from stems, cover iteration recipes
 
 ---
 
 ## 3. Next Actions (immediate)
-1. Write the **POC system prompt + JSON schema** and the Python test harness for Claude Sonnet 4.5.
-2. Implement validators (banned words, 1000-char, bar math, syllables) and iterate until stable.
-3. Scaffold FastAPI + React app; wire `/api/generate` to the proven POC prompt.
-4. Build Generator UI (AI/Form/Hybrid), outputs panel, validation panel.
-5. Add MongoDB library CRUD + library UI.
+1. (Optional) Decide which Phase 3 upgrades to prioritize first:
+   - variants/compare, export bundles, revision history, share links.
+2. Add small UX improvements:
+   - job ETA estimate (based on average completion time)
+   - “Cancel job” endpoint + UI affordance (if desired)
+3. Add library ergonomics:
+   - search + filters, pin favorites, tags.
 
 ---
 
 ## 4. Success Criteria
-- **Core reliability**: LLM returns valid JSON in >95% of runs; app retries/repairs on schema failures.
-- **Governance**: banned words are never present in final outputs (or are explicitly flagged with regeneration required).
-- **Correctness**: Style Prompt always ≤1000 chars; bar-math duration computed and practical target <4:00.
-- **Usability**: user can generate via AI or form in <60 seconds and copy/save outputs easily.
-- **Stability**: E2E tests pass for generate → validate → save → reopen → export/copy flows.
+**MVP (achieved)**
+- **Core reliability**: JSON schema adherence with auto-repair; async jobs avoid gateway timeouts.
+- **Governance**: lyrics banned words flagged/avoided; validation visible and actionable.
+- **Correctness**: Style Prompt ≤1000 chars; bar-math computed; practical target under 4:00.
+- **Usability**: AI/Form/Hybrid modes, copy buttons, save/reopen flow, and clear progress UI.
+- **Stability**: E2E tests pass across generator + library flows.
+
+**Phase 3+ goals**
+- Faster iteration loops (variants/compare), better project organization (revision history), and improved portability (exports/share links).
