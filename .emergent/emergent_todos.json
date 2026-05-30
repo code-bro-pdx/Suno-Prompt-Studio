@@ -1,0 +1,26 @@
+[
+  {
+    "content": "Build backend: validators module + LLM service + API routes (generate, assemble, validate, library)",
+    "status": "completed"
+  },
+  {
+    "content": "Build frontend: index.css tokens, App.js routing, Layout, Generator page (AI + Form + Hybrid modes), Outputs panel, Library page",
+    "status": "completed"
+  },
+  {
+    "content": "Update package.json (add framer-motion if needed) and run yarn install",
+    "status": "completed"
+  },
+  {
+    "content": "Verify backend + frontend start, restart services, screenshot UI",
+    "status": "completed"
+  },
+  {
+    "content": "Run end-to-end testing with testing_agent_v3 (all user stories)",
+    "status": "in_progress"
+  },
+  {
+    "content": "Fix any bugs found and re-test",
+    "status": "pending"
+  }
+]

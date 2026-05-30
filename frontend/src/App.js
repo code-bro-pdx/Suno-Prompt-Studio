@@ -1,54 +1,30 @@
 import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
+import Layout from "@/components/layout/Layout";
+import GeneratorPage from "@/pages/GeneratorPage";
+import LibraryPage from "@/pages/LibraryPage";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
+function App() {
   useEffect(() => {
-    helloWorldApi();
+    // Default to dark theme per design guidelines
+    if (!document.documentElement.classList.contains("dark") && !document.documentElement.classList.contains("light")) {
+      document.documentElement.classList.add("dark");
+    }
   }, []);
 
   return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
-
-function App() {
-  return (
-    <div className="App">
+    <div className="App suno-grain">
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<GeneratorPage />} />
+            <Route path="/library" element={<LibraryPage />} />
+          </Routes>
+        </Layout>
       </BrowserRouter>
+      <Toaster position="top-right" richColors closeButton />
     </div>
   );
 }
