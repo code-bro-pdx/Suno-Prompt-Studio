@@ -3,7 +3,7 @@ import json
 import os
 import re
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
@@ -29,7 +29,7 @@ def _extract_json(text: str) -> Dict[str, Any]:
     return json.loads(text[first:last + 1])
 
 
-def _new_chat(session_id: str | None = None) -> LlmChat:
+def _new_chat(session_id: Optional[str] = None) -> LlmChat:
     api_key = os.environ.get("EMERGENT_LLM_KEY")
     if not api_key:
         raise RuntimeError("EMERGENT_LLM_KEY is not configured.")
@@ -45,7 +45,7 @@ def _new_chat(session_id: str | None = None) -> LlmChat:
     )
 
 
-async def generate_prompt(user_concept: str, session_id: str | None = None) -> Dict[str, Any]:
+async def generate_prompt(user_concept: str, session_id: Optional[str] = None) -> Dict[str, Any]:
     """AI Mode: free-form concept → full Suno prompt JSON."""
     chat = _new_chat(session_id)
     response = await chat.send_message(UserMessage(text=user_concept))
@@ -56,7 +56,7 @@ async def repair_prompt(
     prior_concept: str,
     prior_response_json: Dict[str, Any],
     error_messages: list[str],
-    session_id: str | None = None,
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Ask the model to fix specific validation errors and return revised JSON."""
     chat = _new_chat(session_id)
@@ -74,7 +74,7 @@ async def repair_prompt(
     return _extract_json(response)
 
 
-async def fill_form_from_concept(user_concept: str, session_id: str | None = None) -> Dict[str, Any]:
+async def fill_form_from_concept(user_concept: str, session_id: Optional[str] = None) -> Dict[str, Any]:
     """Hybrid helper: take natural-language concept and return a structured form payload."""
     api_key = os.environ.get("EMERGENT_LLM_KEY")
     if not api_key:
@@ -113,7 +113,7 @@ async def fill_form_from_concept(user_concept: str, session_id: str | None = Non
     return _extract_json(response)
 
 
-async def generate_from_form(form: Dict[str, Any], session_id: str | None = None) -> Dict[str, Any]:
+async def generate_from_form(form: Dict[str, Any], session_id: Optional[str] = None) -> Dict[str, Any]:
     """Form Mode: structured payload → full Suno prompt JSON (LLM-assembled)."""
     concept = (
         "Build a Suno prompt using these structured choices. Honor every field; "

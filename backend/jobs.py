@@ -14,7 +14,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 logger = logging.getLogger("suno-jobs")
 
@@ -46,7 +46,7 @@ class JobQueue:
         patch["updated_at"] = _now()
         await self.collection.update_one({"id": job_id}, {"$set": patch})
 
-    async def get(self, job_id: str) -> Dict[str, Any] | None:
+    async def get(self, job_id: str) -> Optional[Dict[str, Any]]:
         return await self.collection.find_one({"id": job_id}, {"_id": 0})
 
     async def run(

@@ -21,12 +21,14 @@ from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
+
 
 # Local imports
 from llm_service import (  # noqa: E402
@@ -59,11 +61,25 @@ from validators import validate_output  # noqa: E402
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("suno-api")
 
-mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ["DB_NAME"]]
+# Initialize database: MongoDB if configured, otherwise fallback to SQLite
+mongo_url = os.environ.get("MONGO_URL")
+client = None
+if mongo_url:
+    try:
+        logger.info("Initializing MongoDB client...")
+        client = AsyncIOMotorClient(mongo_url)
+        db = client[os.environ.get("DB_NAME", "suno_prompts")]
+    except Exception as e:
+        logger.warning("Failed to initialize MongoDB, falling back to SQLite: %s", e)
+        from database import get_database
+        db = get_database()
+else:
+    logger.info("MONGO_URL not set. Initializing local SQLite database fallback...")
+    from database import get_database
+    db = get_database()
 
 app = FastAPI(title="Suno Song Prompt Generator API")
+
 api = APIRouter(prefix="/api")
 jobs = JobQueue(db)
 
@@ -300,6 +316,14 @@ async def delete_library_item(item_id: str):
 
 app.include_router(api)
 
+# Mount React static frontend files if they exist (production build)
+build_dir = ROOT_DIR / "../frontend/build"
+if build_dir.exists():
+    logger.info("Mounting React production build static files from: %s", build_dir)
+    app.mount("/", StaticFiles(directory=str(build_dir), html=True), name="static")
+else:
+    logger.warning("React build directory %s not found. Running in API-only mode.", build_dir)
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -311,4 +335,6 @@ app.add_middleware(
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    if client:
+        client.close()
+

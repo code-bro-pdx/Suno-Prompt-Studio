@@ -3,7 +3,7 @@ Light, dependency-free heuristics that match the rules from Prompt 05
 and the MasterofSFL guide.
 """
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from suno_knowledge import ESPECIALLY_HARD_BANNED, FULL_BANNED_WORDS
 
@@ -31,7 +31,7 @@ def check_banned_words(text: str) -> List[str]:
     return sorted(set(hits))
 
 
-def _parse_practical_target(s: str) -> Dict[str, int] | None:
+def _parse_practical_target(s: str) -> Optional[Dict[str, int]]:
     if not s:
         return None
     m = re.search(r"(\d+):(\d{2})\s*[-–]\s*(\d+):(\d{2})", s)

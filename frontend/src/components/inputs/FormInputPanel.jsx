@@ -86,41 +86,44 @@ const FormInputPanel = ({ form, setForm, onSubmit, busy }) => {
                 <Input type="number" min={40} max={220} value={form.bpm} onChange={(e) => update({ bpm: parseInt(e.target.value || "0", 10) })} />
               </Field>
               <Field label="Italian tempo">
-                <Select value={form.italian_tempo} onValueChange={(v) => update({ italian_tempo: v })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(k?.italian_tempos || []).map((t) => (
-                      <SelectItem key={t.name} value={t.name}>{t.name} ({t.bpm_range} BPM)</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={form.italian_tempo}
+                  onChange={(e) => update({ italian_tempo: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {(k?.italian_tempos || []).map((t) => (
+                    <option key={t.name} value={t.name}>{t.name} ({t.bpm_range} BPM)</option>
+                  ))}
+                </select>
               </Field>
               <Field label="Time signature">
                 <Input value={form.time_signature} onChange={(e) => update({ time_signature: e.target.value })} />
               </Field>
               <Field label="Mix">
-                <Select value={form.mix} onValueChange={(v) => update({ mix: v })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(k?.mix_types || []).map((m) => (
-                      <SelectItem key={m.name} value={m.name}>{m.name} — {m.feel}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={form.mix}
+                  onChange={(e) => update({ mix: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {(k?.mix_types || []).map((m) => (
+                    <option key={m.name} value={m.name}>{m.name} — {m.feel}</option>
+                  ))}
+                </select>
               </Field>
             </Group>
 
             {/* Genre */}
             <Group title="Genre & subgenre blend">
               <Field label="Mother genre">
-                <Select value={form.mother_genre} onValueChange={(v) => update({ mother_genre: v })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(k?.mother_genres || []).map((g) => (
-                      <SelectItem key={g} value={g}>{g}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={form.mother_genre}
+                  onChange={(e) => update({ mother_genre: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {(k?.mother_genres || []).map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
               </Field>
               <Field label="Mood">
                 <Input value={form.mood} onChange={(e) => update({ mood: e.target.value })} />
@@ -177,24 +180,26 @@ const FormInputPanel = ({ form, setForm, onSubmit, busy }) => {
             {/* Vocals */}
             <Group title="Vocals">
               <Field label="Gender">
-                <Select value={form.vocal_gender} onValueChange={(v) => update({ vocal_gender: v })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Non-binary">Non-binary</SelectItem>
-                  </SelectContent>
-                </Select>
+                <select
+                  value={form.vocal_gender}
+                  onChange={(e) => update({ vocal_gender: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Non-binary">Non-binary</option>
+                </select>
               </Field>
               <Field label="Technical range">
-                <Select value={form.vocal_range} onValueChange={(v) => update({ vocal_range: v })}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(k?.vocal_ranges || []).map((v) => (
-                      <SelectItem key={v.label} value={`${v.label} ${v.range}`}>{v.label} {v.range}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={form.vocal_range}
+                  onChange={(e) => update({ vocal_range: e.target.value })}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {(k?.vocal_ranges || []).map((v) => (
+                    <option key={v.label} value={`${v.label} ${v.range}`}>{v.label} {v.range}</option>
+                  ))}
+                </select>
               </Field>
               <div className="sm:col-span-2 space-y-2">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">Vocal textures</Label>
@@ -313,13 +318,20 @@ const Field = ({ label, children }) => (
 
 const SubgenreCombo = ({ value, options, onChange }) => {
   return (
-    <Input
-      list="subgenre-options"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="Drift Phonk, Dance-Pop, etc."
-      className="flex-1"
-    />
+    <>
+      <Input
+        list="subgenre-options"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Drift Phonk, Dance-Pop, etc."
+        className="flex-1"
+      />
+      <datalist id="subgenre-options">
+        {options.map((opt) => (
+          <option key={opt} value={opt} />
+        ))}
+      </datalist>
+    </>
   );
 };
 
